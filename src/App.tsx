@@ -40,7 +40,11 @@ export default function App() {
       if (!response.ok) {
         throw new Error(`Request failed with status ${response.status}`);
       }
-      const responseData: unknown = await response.json();
+      const rawText = await response.text();
+      if (!rawText.trim()) {
+        throw new Error("Webhook returned an empty response");
+      }
+      const responseData: unknown = JSON.parse(rawText);
       setRecipeText(extractRecipeText(responseData));
     } catch (caughtError) {
       setError(
