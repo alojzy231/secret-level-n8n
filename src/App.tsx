@@ -1,9 +1,9 @@
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
 import { RecipeCard } from "@/components/RecipeCard";
+import { Button } from "@/components/ui/button";
 import { useTypewriter } from "@/hooks/useTypewriter";
+import { useState } from "react";
 
-const N8N_WEBHOOK_URL = "https://placeholder.example.com/webhook/pancake";
+const N8N_WEBHOOK_URL = "http://localhost:5678/webhook-test/pancake-recipe";
 
 function extractRecipeText(responseData: unknown): string {
   if (Array.isArray(responseData) && responseData.length > 0) {
@@ -32,7 +32,11 @@ export default function App() {
     setRecipeText("");
 
     try {
-      const response = await fetch(N8N_WEBHOOK_URL, { method: "POST" });
+      const response = await fetch(N8N_WEBHOOK_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: "Give me a fluffy American pancake recipe" }),
+      });
       if (!response.ok) {
         throw new Error(`Request failed with status ${response.status}`);
       }
