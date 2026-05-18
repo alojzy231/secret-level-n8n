@@ -8,11 +8,13 @@ const N8N_WEBHOOK_URL = "http://localhost:5678/webhook-test/pancake-recipe";
 function extractRecipeText(responseData: unknown): string {
   if (Array.isArray(responseData) && responseData.length > 0) {
     const firstItem = responseData[0] as Record<string, unknown>;
+    if (typeof firstItem.recipe === "string") return firstItem.recipe;
     if (typeof firstItem.text === "string") return firstItem.text;
     if (typeof firstItem.output === "string") return firstItem.output;
   }
   if (typeof responseData === "object" && responseData !== null) {
     const data = responseData as Record<string, unknown>;
+    if (typeof data.recipe === "string") return data.recipe;
     if (typeof data.text === "string") return data.text;
     if (typeof data.output === "string") return data.output;
   }
