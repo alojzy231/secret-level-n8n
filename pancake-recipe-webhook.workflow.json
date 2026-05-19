@@ -49,7 +49,7 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ { recipe: $json.text } }}",
+        "responseBody": "={{ { recipe: $json.text || $json.output || $json.content || $json.response || JSON.stringify($json) } }}",
         "options": {}
       },
       "id": "b1c2d3e4-0003-0003-0003-000000000003",
