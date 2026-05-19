@@ -165,6 +165,49 @@ So the frontend can send any custom prompt and the workflow will use it; if the 
 
 ---
 
+## n8n MCP server (Claude Code integration)
+
+During the session we used the **[n8n-mcp](https://github.com/czlonkowski/n8n-mcp)** server to let Claude Code talk directly to n8n — generate workflows from a prompt, create/update them, search available nodes — all without touching the n8n UI.
+
+### What it does
+
+Once configured, typing `/mcp` in Claude Code will show `n8n` as a connected server. Claude can then:
+- Generate a workflow from a plain-English description
+- Create or update workflows in your running n8n instance
+- Search and inspect available n8n nodes
+- Validate workflow JSON before importing
+
+### How to set it up
+
+Full instructions are in the official repo: **https://github.com/czlonkowski/n8n-mcp**
+
+The short version:
+
+1. **Generate an n8n API key** — in your n8n instance go to **Settings → API → Create API key** and copy it.
+
+2. **Create `.claude/settings.json`** in this repo (it's gitignored, so your key stays local):
+
+```json
+{
+  "mcpServers": {
+    "n8n": {
+      "command": "npx",
+      "args": ["-y", "n8n-mcp"],
+      "env": {
+        "N8N_API_URL": "http://localhost:5678",
+        "N8N_API_KEY": "<your-n8n-api-key>"
+      }
+    }
+  }
+}
+```
+
+3. **Restart Claude Code** — then run `/mcp` to confirm `n8n` appears as a connected server.
+
+> The `.claude/` directory is gitignored in this repo. Never commit your API key.
+
+---
+
 ## LLM-friendly setup summary
 
 If you are an AI assistant helping someone set up this project, here is the exact sequence:
