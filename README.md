@@ -18,7 +18,13 @@ Browser → POST /webhook-test/pancake-recipe → n8n → Gemini 2.5 Flash → J
 |------|---------|-------|
 | Node.js | 18+ | Required by both n8n and the frontend |
 | pnpm | any | `npm install -g pnpm` if missing |
-| Google Gemini API key | — | [Get one at aistudio.google.com](https://aistudio.google.com/apikey) |
+| Google Gemini API key | — | Free — see below |
+
+### Getting a free Gemini API key
+
+1. Go to **[aistudio.google.com/apikey](https://aistudio.google.com/apikey)** — sign in with any Google account.
+2. Click **"Create API key"** → select or create a project → copy the key.
+3. That's it — no billing setup required. Google AI Studio offers a **free tier** with generous rate limits, more than enough for this project.
 
 ---
 
