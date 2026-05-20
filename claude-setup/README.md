@@ -1,70 +1,47 @@
-# Claude Code Setup
+# Claude Code — Worktree Hooks
 
-A collection of hooks, scripts, and a statusline for Claude Code that makes working with git worktrees frictionless and keeps Claude's responses sharp.
+Two hooks that make git worktrees with Claude Code zero-friction: automatic setup on open, automatic cleanup on close.
 
 ---
 
 ## What's included
 
-| File | Hook / Feature | What it does |
-|------|---------------|-------------|
-| `scripts/worktree-setup.sh` | `SessionStart` | On worktree open: copies `.env` files from the main repo and runs `install` |
+| File | Hook | What it does |
+|------|------|-------------|
+| `scripts/worktree-setup.sh` | `SessionStart` | On worktree open: copies `.env` files from the main repo and installs dependencies |
 | `scripts/worktree-teardown.sh` | `WorktreeRemove` | On worktree close: runs `git worktree remove --force` to clean up |
-| `scripts/notify.sh` | `Notification` | Desktop toast with project name, branch, and what Claude needs |
-| `scripts/you_are_not_right.sh` | `UserPromptSubmit` | Detects sycophantic opening lines and injects a reminder to push back |
-| `scripts/statusline-command.sh` | `statusLine` | Two-line status bar: model + branch + sync state + PR title + context % |
-| `settings.json.template` | — | Drop-in `~/.claude/settings.json` wiring all of the above |
+| `settings.json.template` | — | Drop-in hook config for `~/.claude/settings.json` |
 
 ---
 
-## How each piece works
+## Background: what is a git worktree?
 
-### `worktree-setup.sh`
+A git worktree is a second (or third, or fourth) checkout of the same repo in a separate directory, each on its own branch. Claude Code uses them to work on a feature in isolation without touching your main working directory.
 
-Fires every time Claude Code starts a session. It reads the `cwd` from the JSON payload Claude passes on stdin and checks whether it's inside a git worktree (not the main checkout). If it is:
+The problem: every new worktree is a fresh directory — no `node_modules`, no `.env` files. Without these hooks you'd have to manually copy secrets and run `install` every time. These scripts do it automatically.
 
-1. **Copies `.env` files** — finds every gitignored `.env*` file in the main repo and mirrors it into the worktree. This means you never have to manually copy secrets when starting a new worktree.
-2. **Installs dependencies** — detects `pnpm-lock.yaml`, `package-lock.json`, `yarn.lock`, or `Cargo.lock` and runs the appropriate install command. By the time Claude is ready to work, `node_modules` is already there.
+---
 
-Outside a worktree it exits immediately and does nothing.
+## How the scripts work
 
-### `worktree-teardown.sh`
+### `worktree-setup.sh` — runs on `SessionStart`
 
-Fires when Claude Code removes a worktree. Runs `git worktree remove --force` on the worktree path so the directory and the git ref are cleaned up without you having to do it manually.
+When Claude Code opens a session it passes a JSON payload on stdin with the `cwd`. The script checks whether that `cwd` is a worktree (not the main checkout). If it is:
 
-> **Warning:** this is unconditional — uncommitted or unpushed work in the worktree will be lost. The assumption is you push before exiting.
+1. **Copies `.env` files** — scans the main repo for every gitignored `.env*` file and mirrors it into the worktree so secrets are available immediately.
+2. **Installs dependencies** — detects the lockfile and runs the right installer:
+   - `pnpm-lock.yaml` → `pnpm install`
+   - `package-lock.json` → `npm install`
+   - `yarn.lock` → `yarn install`
+   - `Cargo.lock` → `cargo build`
 
-### `notify.sh`
+Outside a worktree the script exits immediately — it's a no-op on normal sessions.
 
-Fires on every `Notification` event (Claude is waiting for input, needs a permission, an MCP server needs auth, etc.). Sends a desktop toast that shows:
+### `worktree-teardown.sh` — runs on `WorktreeRemove`
 
-```
-Claude Code
-my-project (feat/my-feature) · waiting for your input
-```
+When Claude Code exits a worktree it fires this script, which runs `git worktree remove --force` to delete the directory and deregister the worktree from git.
 
-- **macOS:** uses `terminal-notifier` if installed, falls back to `osascript`.
-- **Linux:** uses `notify-send`.
-
-### `you_are_not_right.sh`
-
-Fires before every prompt you submit. Scans the last 5 assistant turns in the transcript and looks for sycophantic openers ("You're right", "Absolutely", etc.). If it finds one, it appends a `<system-reminder>` to the next prompt that tells Claude to stop agreeing reflexively and provide substantive technical analysis instead.
-
-This keeps Claude from degenerating into a yes-machine over long sessions.
-
-### `statusline-command.sh`
-
-A two-line status bar rendered at the top of every Claude Code session:
-
-```
-claude-sonnet-4-6  branch: main ↑2 ~3
-87%  feat: add user auth (OPEN)  worktree: feature-branch (feat/auth)
-```
-
-Line 1: model name, current branch, sync status (↑ commits ahead, ↓ commits behind), uncommitted file count.
-Line 2: context window remaining %, open PR title (color-coded by state), worktree name if in one.
-
-Requires `gh` (GitHub CLI) for the PR info — it gracefully skips that part if `gh` isn't available or there's no PR.
+> **Warning:** this is unconditional. Uncommitted or unpushed work in the worktree will be lost. Push before exiting.
 
 ---
 
@@ -74,12 +51,12 @@ Requires `gh` (GitHub CLI) for the PR info — it gracefully skips that part if 
 
 ```bash
 mkdir -p ~/.claude/scripts
-cp scripts/* ~/.claude/scripts/
-cp scripts/statusline-command.sh ~/.claude/statusline-command.sh
-chmod +x ~/.claude/scripts/*.sh ~/.claude/statusline-command.sh
+cp scripts/worktree-setup.sh ~/.claude/scripts/
+cp scripts/worktree-teardown.sh ~/.claude/scripts/
+chmod +x ~/.claude/scripts/worktree-setup.sh ~/.claude/scripts/worktree-teardown.sh
 ```
 
-### 2. Merge the hooks into your settings
+### 2. Add the hooks to your settings
 
 If you don't have a `~/.claude/settings.json` yet:
 
@@ -87,11 +64,41 @@ If you don't have a `~/.claude/settings.json` yet:
 cp settings.json.template ~/.claude/settings.json
 ```
 
-If you already have one, merge the `hooks` and `statusLine` blocks from `settings.json.template` into your existing file. The hooks section is additive — existing hooks are not affected.
+If you already have one, add the `hooks` block from `settings.json.template` into it. Example of what the merged result should look like:
 
-### 3. Install dependencies
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/scripts/worktree-setup.sh",
+            "timeout": 300
+          }
+        ]
+      }
+    ],
+    "WorktreeRemove": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/scripts/worktree-teardown.sh",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}
+```
 
-**`jq`** — required by all scripts to parse the JSON Claude passes on stdin:
+### 3. Install `jq`
+
+Both scripts use `jq` to parse the JSON payload Claude passes on stdin.
 
 ```bash
 # macOS
@@ -101,45 +108,40 @@ brew install jq
 sudo apt install jq
 ```
 
-**`terminal-notifier`** — optional, macOS only, for richer notifications:
-
-```bash
-brew install terminal-notifier
-```
-
-**`gh`** — optional, for PR info in the statusline:
-
-```bash
-brew install gh   # then: gh auth login
-```
-
 ### 4. Restart Claude Code
 
-The hooks and statusline take effect on the next session start. Open Claude Code and run `/status` or check the top bar — you should see the two-line statusline.
+The hooks take effect on the next session start.
 
 ---
 
 ## Verify it's working
 
-**Worktree hooks:** create a worktree with Claude Code (`/using-git-worktrees` or via the skill), open it, and watch the terminal — you should see `[WORKTREE SETUP] …` lines as deps install and env files copy.
+Create a worktree via Claude Code (use the `using-git-worktrees` skill or ask Claude to create one). When the worktree session opens you should see output like:
 
-**Notifications:** let Claude finish a task and go idle — you should get a desktop toast.
+```
+[WORKTREE SETUP] new worktree: /path/to/worktree
+[WORKTREE SETUP] source repo:  /path/to/main-repo
+[WORKTREE SETUP] copied .env
+[WORKTREE SETUP] installing dependencies with pnpm…
+[WORKTREE SETUP] setup complete
+```
 
-**you_are_not_right:** agree with Claude on something obviously wrong in a test session and check that subsequent responses avoid "You're right" openers.
+When you exit the worktree you should see:
 
-**Statusline:** visible at the top of every Claude Code session once configured.
+```
+[WORKTREE TEARDOWN] removing worktree: /path/to/worktree
+[WORKTREE TEARDOWN] worktree removed
+```
 
 ---
 
 ## LLM-friendly setup summary
 
-If you are an AI assistant helping someone install this:
-
 1. `mkdir -p ~/.claude/scripts`
-2. Copy all `scripts/*.sh` → `~/.claude/scripts/` and `scripts/statusline-command.sh` → `~/.claude/statusline-command.sh`
-3. `chmod +x ~/.claude/scripts/*.sh ~/.claude/statusline-command.sh`
-4. Copy `settings.json.template` → `~/.claude/settings.json` (or merge `hooks` + `statusLine` keys if the file already exists)
-5. `brew install jq` (required) — `brew install terminal-notifier gh` (optional, macOS)
+2. Copy `scripts/worktree-setup.sh` and `scripts/worktree-teardown.sh` → `~/.claude/scripts/`
+3. `chmod +x ~/.claude/scripts/worktree-setup.sh ~/.claude/scripts/worktree-teardown.sh`
+4. Copy `settings.json.template` → `~/.claude/settings.json` (or merge the `hooks` block if the file already exists)
+5. `brew install jq` (or `sudo apt install jq` on Linux)
 6. Restart Claude Code
 
-Key paths: all scripts live in `~/.claude/scripts/`, statusline in `~/.claude/statusline-command.sh`, settings wired in `~/.claude/settings.json`.
+Key paths: scripts in `~/.claude/scripts/`, settings in `~/.claude/settings.json`.
